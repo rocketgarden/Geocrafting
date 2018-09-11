@@ -1,0 +1,42 @@
+name: Geocrafting
+main: net.rocketgarden.minecraft.geocrafting.Geocrafting
+version: 0.2
+
+commands:
+  geocache:
+    description: commands for going geocaching!
+    usage: /<command> <nearby|list|help>
+    permission: geocrafting.caches.find
+    permission-message: You don't have <permission>
+
+
+
+permissions:
+  geocrafting.caches.*:
+    description: Gives access to all cache editing commands
+    children:
+      geocrafting.caches.remove: true
+      geocrafting.caches.place: true
+      geocrafting.caches.find: true
+      geocrafting.caches.list: true
+  geocrafting.caches.remove:
+    description: Allows you to remove any geocache
+    default: op
+  geocrafting.caches.change_owner:
+    description: Allows you to place caches with other owners
+    default: op
+  geocrafting.caches.place:
+    description: Allows you to place a geocache
+    default: true
+  geocrafting.caches.find:
+    description: Allows you to find and log a cache!
+    default: true
+  geocrafting.caches.list:
+    description: Allows you to use the /geocache list command
+    default: op
+    children:
+      geocrafting.caches.list.nearby: true
+  geocrafting.caches.list.nearby:
+    description: Allows you to use the /geocache nearby command
+  geocrafting.caches.info:
+description: Allows you to use the /geocache info command
