@@ -6,23 +6,19 @@ import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
-import org.bukkit.util.Vector
 
 /**
  * Parses commands
- *
- * Created by Vince on 4/13/2014.
  */
-class CommandParser(private val plugin: Geocrafting, private val geocacheManager: GeocacheManager) : CommandExecutor {
-
+class CommandParser(private val plugin: Geocrafting, private val geocacheStorage: GeocacheStorage) : CommandExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
-        if (args.size < 1)
+        if (args.isEmpty())
             return false
-        val subcommand = args[0]
-        when (subcommand) {
-            CMD_LIST -> return listCommand(sender, subcommand, args)
-            CMD_NEARBY -> return nearbyCommand(sender, subcommand, args)
+        val subCommand = args[0]
+        when (subCommand) {
+            CMD_LIST -> return listCommand(sender, subCommand, args)
+            CMD_NEARBY -> return nearbyCommand(sender, subCommand, args)
             CMD_HELP -> {
                 sender.sendMessage(MESSAGE_HELP_PLACEMENT)
                 return true
@@ -38,10 +34,7 @@ class CommandParser(private val plugin: Geocrafting, private val geocacheManager
         }
 
         val stringBuilder = StringBuilder("Caches:\n")
-        val geocaches = geocacheManager.geocaches
-        var location: Location? = null
-        if (sender is Player)
-            location = sender.location
+        val geocaches = geocacheStorage.geocaches
 
         for (cache in geocaches) {
             if (sender !is Player || sender.isOp()) {
@@ -50,7 +43,8 @@ class CommandParser(private val plugin: Geocrafting, private val geocacheManager
                         .append(cache.getLocation().toVector())
                         .append("\n")
             } else {
-                val distSq = location!!.distanceSquared(cache.getLocation())
+                val location = sender.location
+                val distSq = location.distanceSquared(cache.getLocation())
                 stringBuilder.append(cache.name).append(": ")
                 stringBuilder.append(getApproximateDirections(location, cache, distSq))
                 stringBuilder.append("\n")
@@ -71,7 +65,7 @@ class CommandParser(private val plugin: Geocrafting, private val geocacheManager
         }
 
         val stringBuilder = StringBuilder(MESSAGE_NEARBY_CACHES_PREFIX)
-        val geocaches = geocacheManager.geocaches
+        val geocaches = geocacheStorage.geocaches
         val location = sender.location
 
         for (cache in geocaches) { //TODO replace this with a K-D tree
@@ -89,6 +83,7 @@ class CommandParser(private val plugin: Geocrafting, private val geocacheManager
     }
 
     private fun getApproximateDirections(location: Location, cache: Geocache, distSq: Double): String {
+        //todo make this better; round coords instead of distance
         if (distSq < CLOSE_THRESHOLD_SQ) {
             return MESSAGE_CACHE_CLOSE
         } else {
@@ -113,22 +108,22 @@ class CommandParser(private val plugin: Geocrafting, private val geocacheManager
 
     companion object {
 
-        val CMD_LABEL_GEOCACHE = "geocache"
-        val CMD_LIST = "list"
-        val CMD_NEARBY = "nearby"
-        val CMD_HELP = "help"
-        val CMD_INFO = "info"
-        val CMD_FIND = "find"
-        val CMD_HINT = "hint"
+        const val CMD_LABEL_GEOCACHE = "geocache"
+        const val CMD_LIST = "list"
+        const val CMD_NEARBY = "nearby"
+        const val CMD_HELP = "help"
+        const val CMD_INFO = "info"
+        const val CMD_FIND = "find"
+        const val CMD_HINT = "hint"
 
-        val MESSAGE_NEARBY_CACHES_PREFIX = "Nearby caches:\n"
+        const val MESSAGE_NEARBY_CACHES_PREFIX = "Nearby caches:\n"
 
-        val NEARBY_THRESHOLD_SQ = 65536.0
-        val CLOSE_THRESHOLD_SQ = 100.0
+        const val NEARBY_THRESHOLD_SQ = 65536.0 //256 blocks
+        const val CLOSE_THRESHOLD_SQ = 256.0 //16 blocks (~1 chunk)
 
-        val MESSAGE_NEED_PERMISSION = "You do not have permission for that command"
-        val MESSAGE_ONLY_PLAYERS = "Only players can use this command!"
-        val MESSAGE_CACHE_CLOSE = "Very close, start looking!"
+        const val MESSAGE_NEED_PERMISSION = "You do not have permission for that command"
+        const val MESSAGE_ONLY_PLAYERS = "Only players can use this command!"
+        const val MESSAGE_CACHE_CLOSE = "Very close, start looking!"
 
         //coords positive in S & E direction
 

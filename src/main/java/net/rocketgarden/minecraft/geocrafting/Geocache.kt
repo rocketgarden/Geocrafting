@@ -49,7 +49,7 @@ class Geocache private constructor() {
         if (location == null) {
             val w = Bukkit.getWorld(world)
             if (w == null)
-                Bukkit.getLogger().warning("Could not restore geocache location in world: " + world!!)
+                Bukkit.getLogger().warning("Could not restore geocache location in world: $world")
             location = Location(w, x, y, z)
         }
         return location!!
@@ -60,7 +60,7 @@ class Geocache private constructor() {
      */
     fun addFinder(player: Player): Boolean {
         val name = player.name
-        return !finds!!.contains(name) && finds!!.add(name)
+        return !finds.contains(name) && finds.add(name)
     }
 
     fun isOwnedBy(player: Player): Boolean {

@@ -1,14 +1,15 @@
 package net.rocketgarden.minecraft.geocrafting
 
 import com.google.common.base.Strings
-import org.bukkit.*
+import org.bukkit.ChatColor
+import org.bukkit.Material
 import org.bukkit.block.Chest
-import org.bukkit.configuration.file.FileConfiguration
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
 import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BookMeta
@@ -17,18 +18,17 @@ import org.bukkit.plugin.java.JavaPlugin
 
 class Geocrafting : JavaPlugin(), Listener {
 
-
     var debug: Boolean = false
 
-    private lateinit var geocacheManager: GeocacheManager
+    private lateinit var geocacheStorage: GeocacheStorage
     private lateinit var commandParser: CommandParser
 
     override fun onEnable() {
         server.pluginManager.registerEvents(this, this)
 
-        geocacheManager = GeocacheFileManager(this)
+        geocacheStorage = GeocacheFileStorage(this)
 
-                commandParser = CommandParser(this, geocacheManager)
+                commandParser = CommandParser(this, geocacheStorage)
 
         getCommand(CommandParser.CMD_LABEL_GEOCACHE).executor = commandParser
     }
@@ -43,19 +43,28 @@ class Geocrafting : JavaPlugin(), Listener {
             val chest = block.state as Chest
             val player = event.player
 
-            //CREATE A GEOCACHE-----
             if (item != null && item.data.itemType == Material.WRITTEN_BOOK) {
-                if (geocacheManager.isGeocache(block)) {
+                //CREATE A GEOCACHE-----
+                //player must be holding a (log)book
+
+                if (geocacheStorage.isGeocache(block)) {
                     player.sendMessage(MESSAGE_ALREADY_CACHE)
                     return
                 }
-                //make a cache!
-                event.isCancelled = true
+
+                event.isCancelled = true //cancel default interaction
+
                 if (countItems(chest.inventory) > 0) {
                     player.sendMessage(MESSAGE_CHEST_NOT_EMPTY)
                     return
                 }
-                //player holding book
+
+                if(!player.hasPermission(PERM_PLACE_CACHES)){
+                    player.sendMessage(MESSAGE_NO_PLACE_PERMS)
+                    return
+                }
+
+                //make a cache!
                 val bookMeta = item.itemMeta as BookMeta
                 logger.info("Contents: " + bookMeta.title + "\n" + bookMeta.getPage(1))
 
@@ -63,29 +72,36 @@ class Geocrafting : JavaPlugin(), Listener {
 
                 val vector = block.location.toVector()
                 player.sendMessage(String.format(MESSAGE_CACHE_PLACED_SS, cache.name, vector.toString()))
-                event.player.itemInHand = null
-                geocacheManager.saveGeocache(cache)
-                logger.info(player.name + " created cache \"" + cache.name + "\", at " + chest.getLocation())
 
-                //FIND A GEOCACHE-----
+                //check which hand was used before we go deleting items
+                if(event.hand == EquipmentSlot.HAND) {
+                    event.player.inventory.itemInMainHand = null
+                } else {
+                    event.player.inventory.itemInOffHand = null
+                }
+
+                geocacheStorage.saveGeocache(cache)
+                logger.info(player.name + " created cache \"" + cache.name + "\", at " + chest.location)
+
             } else {
-                geocacheManager.getGeocache(block.location)?.let { geocache ->
+                //FIND A GEOCACHE-----
+                geocacheStorage.getGeocache(block.location)?.let { geocache ->
                     if (!geocache.isOwnedBy(player)) {
                         //not the owner, count as a find.
                         val ftf = geocache.finds.isEmpty()
                         if (geocache.addFinder(player)) {
-                            logVerbose(player.name + " found a new cache, \"" + geocache.name + "\", at " + chest.getLocation())
+                            logVerbose(player.name + " found a new cache, \"" + geocache.name + "\", at " + chest.location)
                             player.sendMessage(String.format(MESSAGE_FIND_CONGRATS_SS, geocache.name, geocache.owner))
                             if (ftf)
                             //FTF!
                                 player.sendMessage(MESSAGE_FTF_CONGRATS)
                         } else {
-                            logVerbose(player.name + " opened cache \"" + geocache.name + "\" at " + chest.getLocation())
+                            logVerbose(player.name + " opened cache \"" + geocache.name + "\" at " + chest.location)
                             //already found
                             player.sendMessage(String.format(MESSAGE_ALREADY_LOGGED_S, geocache.name))
                         }
                     } else {
-                        player.sendMessage(String.format(MESSAGE_YOU_OWN_CACHE_S, geocache?.name))
+                        player.sendMessage(String.format(MESSAGE_YOU_OWN_CACHE_S, geocache.name))
                     }
                 }
             } //else no cache or book, do nothing
@@ -97,7 +113,7 @@ class Geocrafting : JavaPlugin(), Listener {
         val block = event.block
         val player = event.player
         val override = player.isOp || player.hasPermission(PERM_REMOVE_CACHES)
-        geocacheManager.getGeocache(block.location)?.let { geocache ->
+        geocacheStorage.getGeocache(block.location)?.let { geocache ->
             if (geocache.isOwnedBy(player) || override) {
                 event.isCancelled = false
                 //owner (or admin) broke it, let them
@@ -114,8 +130,8 @@ class Geocrafting : JavaPlugin(), Listener {
                 val location = event.block.location
                 event.block.world.dropItem(location, item)
 
-                logger.info(player.name + " broke cache " + name + " at " + location)
-                geocacheManager.removeGeocache(location)
+                logger.info(player.name + " broke geocache " + name + " at " + location)
+                geocacheStorage.removeGeocache(location)
             } else {
                 player.sendMessage(MESSAGE_NO_BREAKING)
                 event.isCancelled = true
@@ -130,12 +146,13 @@ class Geocrafting : JavaPlugin(), Listener {
 
     override fun onDisable() {
         super.onDisable()
-        geocacheManager.onStop()
+        geocacheStorage.onStop()
     }
 
     companion object {
 
         val MESSAGE_CHEST_NOT_EMPTY = ChatColor.YELLOW.toString() + "Only empty chests can be converted to geocaches"
+        val MESSAGE_NO_PLACE_PERMS = ChatColor.YELLOW.toString() + "You don't have permission to create geocaches"
 
         val MESSAGE_NO_BREAKING = ChatColor.YELLOW.toString() + "Only the owner can remove this geocache"
 
@@ -149,12 +166,12 @@ class Geocrafting : JavaPlugin(), Listener {
 
         val CONFIG_VERBOSE = "verbose"
 
-        val PERM_REMOVE_CACHES = "geocrafting.caches.remove"
-        val PERM_PLACE_CACHES = "geocrafting.caches.place"
-        val PERM_FIND_CACHES = "geocrafting.caches.find"
-        val PERM_LIST_CACHES = "geocrafting.caches.list"
-        val PERM_CHANGE_OWNER = "geocrafting.caches.change_owner"
-        val MESSAGE_CACHE_PLACED_SS = "\"%s\" placed at %s"
+        const val PERM_REMOVE_CACHES = "geocrafting.caches.remove"
+        const val PERM_PLACE_CACHES = "geocrafting.caches.place"
+        const val PERM_FIND_CACHES = "geocrafting.caches.find"
+        const val PERM_LIST_CACHES = "geocrafting.caches.list"
+        const val PERM_CHANGE_OWNER = "geocrafting.caches.change_owner"
+        const val MESSAGE_CACHE_PLACED_SS = "\"%s\" placed at %s"
 
         fun countItems(inv: Inventory): Int {
             var i = 0

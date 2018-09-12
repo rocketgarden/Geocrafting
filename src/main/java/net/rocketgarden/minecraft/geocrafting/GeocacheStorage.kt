@@ -5,10 +5,8 @@ import org.bukkit.block.Block
 
 /**
  * Interface defining classes that can save/load geocaches from various sources
- *
- * Created by Vince on 4/12/2014.
  */
-interface GeocacheManager {
+interface GeocacheStorage {
 
     val geocaches: List<Geocache>
     fun saveGeocache(geocache: Geocache)
